@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% load i18n %}
+{% block title %} {% trans "About MeMemo" %} {% endblock %}
+
+{% block css %}
+<link rel="stylesheet" type="text/css" href="/static/css/default.css" />
+{% endblock %}
+
+{% block header %}
+<div id="wrapper">
+
+{% include "header.html" %}
+
+{% endblock %}
+
+{% block content %}
+<h1>{% trans "About Learn@Fudan" %}</h1>
+    <div class="grid-16-8 clearfix">
+
+        <div class="article" style="padding-left:32px">
+            <p class="ul">
+            Learn@Fudan是一个面向大学生们的以交流学习以及课程信息为主题的在线平台，属于Web 2.0型的网站。
+            </p>
+            <p class="ul">
+            Learn@Fudan有以下功能：
+            </p>
+            <p class="ul">
+            <li>在线查看、发布课程相关信息，对课程进行评论，交流学习经验。快速地找到某一门课程所需的教材以及参考书。</li>
+            <li>对BBS精华区的课程评论进行索引并且整合到课程评论模块里，方便同学们查找对某一门课程的讨论、评价。</li>
+            <li>二手图书信息的发布：帮助教材书籍在同学们之间的流动，实现最大程度利用图书资源的目的。对于手中有闲置教材书籍的同学，可以发布二手图书转让信息。对于想要获取教材的同学，可以查找已发布的二手图书信息。</li>
+            <li>与豆瓣©的结合：发布二手图书信息时可以通过抓取豆瓣上的现有信息实现快速简便的发布。</li>
+            </p>
+	    <p>Email: <a href="mailto:shamrock.fdume@gmail.com">shamrock.fdume@gmail.com</a></p>
+	    <p>By Pro711 Lighteningman JerryZheng Hamster.Cheng</p>
+        </div>
+    </div>
+
+{% endblock content %}
+
+
+{% block footer %}
+{% include "footer.html" %}
+
+</div>
+
+{% endblock %}

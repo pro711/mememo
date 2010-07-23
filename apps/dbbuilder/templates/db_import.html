@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% load i18n %}
+{% block title %} {% trans "DB Import" %} {% endblock %}
+
+{% block css %}
+<link rel="stylesheet" type="text/css" href="/static/css/default.css" />
+{% endblock %}
+
+{% block header %}
+<div id="wrapper">
+
+{% include "header.html" %}
+
+{% endblock %}
+
+{% block content %}
+<h1>{% trans "Database import" %}</h1>
+<form action="." method="get">
+    <div><label>Database filename:</label></div>
+    <div><input name="dbfile" type="text"></input></div>
+    <div><label>Deck name:</label></div>
+    <div><input name="deckname" type="text"></input></div>
+    <div><label>Deck description</label></div>
+    <div><input name="deckdesc" type="text"></input></div>
+    <input type="submit" value="Go" />
+</form>
+{% endblock content %}
+
+{% block footer %}
+{% include "footer.html" %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% load i18n %}
+{% block title %} {% trans "Welcome to MeMemo" %} {% endblock %}
+
+{% block css %}
+<link rel="stylesheet" type="text/css" href="/static/css/default.css" />
+{% endblock %}
+
+{% block header %}
+<div id="wrapper">
+{% include "header.html" %}
+{% endblock %}
+
+{% block content %}
+<div id="main" style="margin-top:150px">
+<center><h1>{% trans "Welcome to MeMemo" %}</h1>
+</center>
+</div>
+{% endblock content %}
+
+{% block footer %}
+{% include "footer.html" %}
+</div>
+{% endblock %}
