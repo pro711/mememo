@@ -41,6 +41,7 @@ def get_items(request):
             records += LearningRecord.get_new_items(request.user,0,new_items_size,0,'')
         
         # prepare response
+        # FIXME: performance tuning
         for i in records:
             card = Card.gql('WHERE _id = :1', i.card_id).get()
             if card:

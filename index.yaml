@@ -1,5 +1,16 @@
 indexes:
 
+- kind: core_learningrecord
+  properties:
+  - name: _user
+  - name: next_rep
+
+- kind: core_learningrecord
+  properties:
+  - name: _user
+  - name: card_id
+    direction: desc
+
 - kind: django_admin_log
   properties:
   - name: content_type

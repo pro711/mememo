@@ -69,10 +69,12 @@ class LearningRecord(db.Model):
         size  = min(size,MAX_SIZE)
         
         today = datetime.date.today()
-        q = LearningRecord.gql('WHERE _user = :1 AND next_rep <= :2', user, today)
+        q = LearningRecord.gql('WHERE _user = :1 AND next_rep <= :2 ORDER BY next_rep', user, today)
         results = q.fetch(size)
+        results = filter(lambda x:x.acq_reps >= 0, results)
         #~ raise Exception
-        results = filter(lambda x:x.acq_reps > 0, results)
+        # sort results by card_id
+        results.sort(key=lambda x:x.card_id)
         return results
     
     @classmethod    
@@ -112,6 +114,7 @@ class LearningRecord(db.Model):
             q_card = Card.all()
             q_card.filter('_id >',last_card_id).order('_id')
             new_cards = q_card.fetch(new_items_size)
+            #~ raise Exception
             # create learning records for these cards
             today = datetime.date.today()
             for c in new_cards:

@@ -46,7 +46,8 @@ if (window.self != window.top) {
 var MEM={};
 
 // 服务器
-MEM.server = "http://localhost:8080/"
+//~ MEM.server = "http://localhost:8080/"
+MEM.server = "http://me-memo.appspot.com/"
 
 // 版本，对应@version和@miniver，用于升级相关功能
 MEM.version="0.1.0";

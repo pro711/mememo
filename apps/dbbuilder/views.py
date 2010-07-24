@@ -167,8 +167,10 @@ def remove_duplicates(request):
     if request.method == 'GET':
         _from = int(request.GET.get('from',0))
         _to = int(request.GET.get('to',0))
+        count = 0
         for i in range(_from,_to+1):
             q = Card.all().filter('_id =',i).fetch(100)
             for card in q[1:]:
                 card.delete()
-            
+                count += 1
+        return HttpResponse('%d duplicates removed.' % (count,))
