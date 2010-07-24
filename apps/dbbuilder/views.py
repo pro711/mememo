@@ -144,7 +144,7 @@ def csv_import(request, dbfile, deckname, deckdesc):
                     deck_id=deck._id, category=row[4])
             card.put()
             count += 1
-            if count >= 500:
+            if count >= 300:
                 break
     # update volume
     deck.volume += count
@@ -163,3 +163,12 @@ def db_import(request):
                 # import from csv file
                 return csv_import(request,dbfile,deckname,deckdesc)
 
+def remove_duplicates(request):
+    if request.method == 'GET':
+        _from = int(request.GET.get('from',0))
+        _to = int(request.GET.get('to',0))
+        for i in range(_from,_to+1):
+            q = Card.all().filter('_id =',i).fetch(100)
+            for card in q[1:]:
+                card.delete()
+            

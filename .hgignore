@@ -1,0 +1,11 @@
+syntax: glob
+*.pyc
+*~
+*.csv
+Makefile
+runserver.sh
+dev_appserver.datastore
+
+syntax: regexp
+^common/
+^tools/

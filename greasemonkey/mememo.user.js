@@ -49,8 +49,7 @@ var MEM={};
 MEM.server = "http://localhost:8080/"
 
 // 版本，对应@version和@miniver，用于升级相关功能
-MEM.version="3.0.4.20100712";
-MEM.miniver=328;
+MEM.version="0.1.0";
 
 // 存储空间，用于保存全局性变量
 MEM.storage={};
@@ -1180,7 +1179,13 @@ function getScheduledItems() {
 			alert("getScheduledItems failed.")
 			return;
 		}
-		var items=JSON.parse(html).records;
+		data = JSON.parse(html);
+		if (data.status == "failed") {
+			// 未验证用户
+			$popup("MeMemo 登陆",'请先<a target="_blank" href="'+MEM.server+'account/login/"'+">登陆</a>","320x0+500-300",10,10);
+			return;
+		}
+		var items=data.records;
 		$alloc("scheduledItems").list=items;
 		addMeMemoEntries();
 	});
@@ -1222,7 +1227,7 @@ function gradeItem(id, newGrade) {
 function addMeMemoEntry(item) {
 	var entry=$node("li").attr("id","memoItem_" + item._id);
 	var h3 = $node("h3")
-	$node("").text(item.question + " : " ).appendTo(h3);
+	$node("").text(item.question).appendTo(h3);
 	$node("span").attr({"class":"statuscmtitem",
 						"onmouseout":"$('memoAnswer_" + item._id +"').hide()",
 						"onmouseover":"$('memoAnswer_" + item._id +"').show()",
@@ -1231,7 +1236,7 @@ function addMeMemoEntry(item) {
 						"id":"memoAnswer_" + item._id}).text(item.answer)).appendTo(h3);
 	h3.appendTo(entry);
 	$node("div").attr({"class":"content"}).append($node("blockquote").text(item.note)).appendTo(entry);
-	gradeArea = $node("div").attr("class","details").append($node("div").attr("class","legend"));
+	gradeArea = $node("div").attr("class","details").append($node("span").attr("class","legend").text("困难  "));
 	// 添加评分按钮
 	for (var i=1;i<=5;i++) {
 		gradeBtn = $node("input").attr({"type":"button","class":"input-button","value":i});
@@ -1243,6 +1248,7 @@ function addMeMemoEntry(item) {
 		gradeBtn.appendTo(gradeArea);
 		//~ $node("span").attr("class", "seperator").text("|").appendTo(gradeArea);
 	}
+	$node("span").attr("class","legend").text("  简单").appendTo(gradeArea);
 	gradeArea.appendTo(entry);
 	entry.appendTo($("#meMemoFeedHome"));
 };
@@ -1262,7 +1268,7 @@ function addMeMemoEntries() {
 		}
 	}
 	else {
-		//~ alert ("scheduledItems not allocated.");
+		$popup("MeMemo","scheduledItems not allocated.",null,3,10);
 		return null;
 	}
 };
@@ -1274,7 +1280,7 @@ $("#showMeMemo a").hook("click",function (evt) {
 	$("#showMeMemo").attr({"class":"current"});
 	removeFeeds();
 	getScheduledItems();
-	addMeMemoEntries();
+	//~ addMeMemoEntries();
 	});
 
 
