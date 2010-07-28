@@ -3,7 +3,7 @@ from django.utils.translation import ugettext_lazy as _
 from google.appengine.ext import db
 from django.contrib.auth.models import User
 
-import random, datetime
+import random, datetime, logging
 
 from apps.core.item import Item
 
@@ -102,24 +102,40 @@ class LearningRecord(db.Model):
             new_items_size = size - len(results)
             count = 0
             #~ while count < new_items_size:
-            last_card = LearningRecord.gql('WHERE _user = :1 ORDER BY card_id DESC', user).get()
-            if not last_card:
-                # we do not have any records now
-                last_card_id = 0
-            else:
-                last_card_id = last_card.card_id
-            # get some cards
-            #~ q_card = Card.gql('WHERE card_id > :1 ORDER BY card_id LIMIT :2', last_card_id, new_items_size)
-            # LIMIT do not support bound parameters, use query instead
-            q_card = Card.all()
-            q_card.filter('_id >',last_card_id).order('_id')
-            new_cards = q_card.fetch(new_items_size)
+            # get learning progress
+            lp = LearningProgress.gql('WHERE _user = :1', user).get()
+            if not lp:
+                logging.error('LearningProgress not found.')
+                return results
+            new_cards = []
+            count = 0
+            for i in range(1, lp._deck.volume):
+                if i not in lp.learned_items:
+                    new_cards.append(i)
+                    count += 1
+                    if count == new_items_size:
+                        lp.learned_items += new_cards
+                        lp.put()
+                        break
+                
+            #~ last_card = LearningRecord.gql('WHERE _user = :1 ORDER BY card_id DESC', user).get()
+            #~ if not last_card:
+                #~ # we do not have any records now
+                #~ last_card_id = 0
+            #~ else:
+                #~ last_card_id = last_card.card_id
+            #~ # get some cards
+            #~ # LIMIT do not support bound parameters, use query instead
+            #~ q_card = Card.all()
+            #~ q_card.filter('_id >',last_card_id).order('_id')
+            #~ new_cards = q_card.fetch(new_items_size)
             #~ raise Exception
             # create learning records for these cards
             today = datetime.date.today()
             for c in new_cards:
                 r = LearningRecord(_user = user,
-                    card_id = c._id,
+                    #~ card_id = c._id,
+                    card_id = c,
                     date_learn = today,
                     interval = 0,
                     next_rep = today,
@@ -159,6 +175,20 @@ class LearningRecord(db.Model):
         self.put()
         return True
     
-
+class LearningProgress(db.Model):
+    '''Learning progress for a deck.'''
+    _user = db.ReferenceProperty(User, required=True)
+    _deck = db.ReferenceProperty(Deck)
+    date_start = db.DateProperty(auto_now_add=True)
+    date_learn = db.DateProperty(auto_now=True)
+    learned_items = db.ListProperty(long)
     
+    def __unicode__(self):
+        return '%s' % (self._user)
     
+    @classmethod
+    def create(self, user, deck):
+        '''Create new learning progress for user.'''
+        lp = LearningProgress(_user=user, _deck=deck, learned_items=[])
+        lp.put()
+        return lp

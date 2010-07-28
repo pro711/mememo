@@ -11,6 +11,14 @@ handlers:
   secure: optional
   login: admin
 
+- url: /console/.*
+  script: $PYTHON_LIB/google/appengine/ext/admin
+  login: admin
+
+- url: /media
+  static_dir: media
+  secure: optional
+
 - url: /.*
   script: common/appenginepatch/main.py
   secure: optional

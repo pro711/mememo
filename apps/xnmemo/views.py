@@ -11,9 +11,20 @@ from google.appengine.ext import db
 from google.appengine.api import urlfetch
 from ragendja.template import render_to_response
 
-from apps.core.models import Card, Deck, LearningRecord
+from apps.core.models import Card, Deck, LearningRecord, LearningProgress
 
-
+def range_segment(lst):
+    segment_range = 100
+    list_size = len(lst)
+    lst.sort()
+    x, y = 0, 0
+    while y < list_size:
+        if lst[y] - lst[x] < segment_range:
+            y += 1
+        else:
+            yield lst[x:y]
+            x = y
+    yield lst[x:y]
 
 def get_items(request):
     if request.method == 'GET':
@@ -32,6 +43,15 @@ def get_items(request):
         rr = result['records']  # shortcut
         today = datetime.date.today()
         size = int(request.GET.get('size', 20))
+        # get learning progress
+        learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
+        if not learning_progress:
+            # get deck first
+            deck = Deck.gql('WHERE _id = 1').get()  #FIXME: GRE
+            if not deck:
+                logging.error('deck not found')
+                raise Exception, 'deck not found'
+            learning_progress = LearningProgress.create(request.user, deck)
         
         # get scheduled items first
         records = LearningRecord.get_scheduled_items(request.user,0,size,0,'')
@@ -41,17 +61,18 @@ def get_items(request):
             records += LearningRecord.get_new_items(request.user,0,new_items_size,0,'')
         
         # prepare response
-        # FIXME: performance tuning
-        for i in records:
-            card = Card.gql('WHERE _id = :1', i.card_id).get()
-            if card:
-                rr.append({'_id':card._id,
-                            'question':card.question,
-                            'answer':card.answer,
-                            'note':card.note,
-                            'deck_id':card.deck_id,
-                            'category':card.category
-                            })
+        record_ids = [i.card_id for i in records]
+        for i in range_segment(record_ids):
+            cards = Card.gql('WHERE _id >= :1 and _id <= :2', i[0], i[-1]).fetch(i[-1]-i[0])
+            for card in cards:
+                if card:
+                    rr.append({'_id':card._id,
+                                'question':card.question,
+                                'answer':card.answer,
+                                'note':card.note,
+                                'deck_id':card.deck_id,
+                                'category':card.category
+                                })
         
         return HttpResponse(simplejson.dumps(result,sort_keys=False))
 
@@ -125,6 +146,16 @@ def mark_items(request):
                         'message': 'error: from or to undefined' }
             return HttpResponse(simplejson.dumps(result))
         
+        # get learning progress
+        learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
+        if not learning_progress:
+            # get deck first
+            deck = Deck.gql('WHERE _id = 1').get()  #FIXME: GRE
+            if not deck:
+                logging.error('deck not found')
+                raise Exception, 'deck not found'
+            learning_progress = LearningProgress.create(request.user, deck)
+        
         q_card = Card.all()
         q_card.filter('question >',w_from).filter('question <=',w_to)
         new_cards = q_card.fetch(MAX_SIZE)
@@ -149,6 +180,10 @@ def mark_items(request):
                 ret_reps_since_lapse = 0)
             r.put()
             count += 1
+            # append to learning progress
+            learning_progress.learned_items.append(c._id)
+        # update learning record
+        learning_progress.put()
         
         result = {  'status': 'succeed',
                     'message': '%d records created' % count }
