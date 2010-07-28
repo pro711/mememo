@@ -7,6 +7,22 @@ import random, datetime, logging
 
 from apps.core.item import Item
 
+class FixedOffset(datetime.tzinfo):
+    """Fixed offset in minutes east from UTC."""
+    def __init__(self, offset, name):
+        self.__offset = datetime.timedelta(minutes = offset)
+        self.__name = name
+
+    def utcoffset(self, dt):
+        return self.__offset
+
+    def tzname(self, dt):
+        return self.__name
+
+    def dst(self, dt):
+        return datetime.timedelta(0)
+
+CST = FixedOffset(480,"China Standard Time")
 
 class Card(db.Model):
     """A card in a deck."""
@@ -68,7 +84,7 @@ class LearningRecord(db.Model):
         MAX_SIZE = 100
         size  = min(size,MAX_SIZE)
         
-        today = datetime.date.today()
+        today = datetime.datetime.now(tz=CST).date()
         q = LearningRecord.gql('WHERE _user = :1 AND next_rep <= :2 ORDER BY next_rep', user, today)
         results = q.fetch(size)
         results = filter(lambda x:x.acq_reps >= 0, results)
@@ -131,7 +147,7 @@ class LearningRecord(db.Model):
             #~ new_cards = q_card.fetch(new_items_size)
             #~ raise Exception
             # create learning records for these cards
-            today = datetime.date.today()
+            today = datetime.datetime.now(tz=CST).date()
             for c in new_cards:
                 r = LearningRecord(_user = user,
                     #~ card_id = c._id,

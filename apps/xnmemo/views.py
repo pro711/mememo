@@ -11,7 +11,7 @@ from google.appengine.ext import db
 from google.appengine.api import urlfetch
 from ragendja.template import render_to_response
 
-from apps.core.models import Card, Deck, LearningRecord, LearningProgress
+from apps.core.models import Card, Deck, LearningRecord, LearningProgress, CST
 
 def range_segment(lst):
     segment_range = 100
@@ -41,7 +41,7 @@ def get_items(request):
         result = {}
         result['records'] = []
         rr = result['records']  # shortcut
-        today = datetime.date.today()
+        today = datetime.datetime.now(tz=CST).date()
         size = int(request.GET.get('size', 20))
         # get learning progress
         learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
@@ -160,7 +160,7 @@ def mark_items(request):
         q_card.filter('question >',w_from).filter('question <=',w_to)
         new_cards = q_card.fetch(MAX_SIZE)
         # create learning records for these cards
-        today = datetime.date.today()
+        today = datetime.datetime.now(tz=CST).date()
         count = 0
         for c in new_cards:
             if LearningRecord.gql('WHERE _user = :1 AND card_id = :2', request.user, c._id).get():
@@ -192,3 +192,29 @@ def mark_items(request):
 def get_stats(request):
     '''Learning statistics.'''
     
+def update_learning_progress(request):
+    if request.method == 'GET':
+        username = request.GET.get('user', '')
+        if not username:
+            result = {  'status': 'failed',
+                        'message': 'user not specified' }
+            return HttpResponse(simplejson.dumps(result))
+        user = User.gql('WHERE username = :1', username).get()
+        if not user:
+            result = {  'status': 'failed',
+                        'message': 'user %s not found' % (username,) }
+            return HttpResponse(simplejson.dumps(result))
+        records = LearningRecord.gql('WHERE _user = :1', user).fetch(1000)
+        record_ids = [i.card_id for i in records]
+        # get learning progress
+        learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
+        if not learning_progress:
+            result = {  'status': 'failed',
+                        'message': 'learning_progress not found' }
+            return HttpResponse(simplejson.dumps(result))
+        learning_progress.learned_items = sorted(record_ids)
+        learning_progress.put()
+        result = {  'status': 'succeed',
+                    'message': 'learning_progress updated' }
+        return HttpResponse(simplejson.dumps(result))
+        
