@@ -3,6 +3,7 @@ from django.conf.urls.defaults import *
 
 urlpatterns = patterns('apps.xnmemo.views',
     #~ (r'^$', 'xnmemo_index'),
+    (r'^has_scheduled_items/$', 'has_scheduled_items'),
     (r'^get_items/$', 'get_items'),
     (r'^update_item/$', 'update_item'),
     (r'^mark_items/$', 'mark_items'),

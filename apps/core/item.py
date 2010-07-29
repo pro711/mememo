@@ -19,6 +19,22 @@ import random, time, os, string, sys, logging, re
 import datetime, copy
 
 #~ from apps.core.models import Card, Deck, LearningRecord
+class FixedOffset(datetime.tzinfo):
+    """Fixed offset in minutes east from UTC."""
+    def __init__(self, offset, name):
+        self.__offset = datetime.timedelta(minutes = offset)
+        self.__name = name
+
+    def utcoffset(self, dt):
+        return self.__offset
+
+    def tzname(self, dt):
+        return self.__name
+
+    def dst(self, dt):
+        return datetime.timedelta(0)
+
+CST = FixedOffset(480,"China Standard Time")
 
 class Item(object):
     def __init__(self, card, record=None):
@@ -91,7 +107,7 @@ class Item(object):
         # case when learning ahead on the same day.
         
         scheduled_interval = self.interval
-        actual_interval    = self.diff_date(datetime.date.today(), self.date_learn)
+        actual_interval    = self.diff_date(self.date_learn, datetime.datetime.now(tz=CST).date())
         new_interval = 0
         
         retval = False
@@ -140,6 +156,7 @@ class Item(object):
             self.ret_reps_since_lapse += 1
             retval = True
             
+            logging.debug('scheduled_interval: %d, actual_interval: %d' % (scheduled_interval,actual_interval))
             if actual_interval >= scheduled_interval:
                 if new_grade == 2:
                     self.easiness -= 0.16
@@ -186,7 +203,7 @@ class Item(object):
         noise = self.calculate_interval_noise(new_interval)
 
         # Update grade and interval.
-        self.date_learn = datetime.date.today()
+        self.date_learn = datetime.datetime.now(tz=CST).date()
         self.interval = new_interval + noise
         self.next_rep = self.date_learn + datetime.timedelta(self.interval)
         self.grade    = new_grade
@@ -212,7 +229,7 @@ class Item(object):
 
     def is_scheduled(self):
         scheduled_interval = self.interval
-        actual_interval    = self.diff_date(datetime.date.today(), self.date_learn)
+        actual_interval    = self.diff_date(self.date_learn, datetime.datetime.now(tz=CST).date())
         if scheduled_interval <= actual_interval and self.acq_reps > 0:
             return True
         else:

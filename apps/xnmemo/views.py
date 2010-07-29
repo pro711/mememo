@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import datetime
+import datetime, logging
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
@@ -25,6 +25,24 @@ def range_segment(lst):
             yield lst[x:y]
             x = y
     yield lst[x:y]
+
+def has_scheduled_items(request):
+    if request.method == 'GET':
+        # check whether logged in
+        if not request.user.is_authenticated():
+            result = {  'status': 'failed',
+                        'message': 'user not authenticated' }
+            return HttpResponse(simplejson.dumps(result))
+        elif not request.user.is_active:
+            result = {  'status': 'failed',
+                        'message': 'user not active' }
+            return HttpResponse(simplejson.dumps(result))
+        
+        result = {}
+        s_items = LearningRecord.get_scheduled_items(request.user,0,100,0,'')
+        result['scheduled_items'] = len(s_items)
+        return HttpResponse(simplejson.dumps(result))
+        
 
 def get_items(request):
     if request.method == 'GET':
@@ -62,8 +80,12 @@ def get_items(request):
         
         # prepare response
         record_ids = [i.card_id for i in records]
+        logging.debug(str(record_ids))
+        #~ logging.debug(str(range_segment(record_ids)))
         for i in range_segment(record_ids):
             cards = Card.gql('WHERE _id >= :1 and _id <= :2', i[0], i[-1]).fetch(i[-1]-i[0])
+            # filter out unrelated cards
+            cards = filter(lambda x:x._id in i, cards)
             for card in cards:
                 if card:
                     rr.append({'_id':card._id,
@@ -207,11 +229,14 @@ def update_learning_progress(request):
         records = LearningRecord.gql('WHERE _user = :1', user).fetch(1000)
         record_ids = [i.card_id for i in records]
         # get learning progress
-        learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
+        learning_progress = LearningProgress.gql('WHERE _user = :1', user).get()
         if not learning_progress:
-            result = {  'status': 'failed',
-                        'message': 'learning_progress not found' }
-            return HttpResponse(simplejson.dumps(result))
+            # get deck first
+            deck = Deck.gql('WHERE _id = 1').get()  #FIXME: GRE
+            if not deck:
+                logging.error('deck not found')
+                raise Exception, 'deck not found'
+            learning_progress = LearningProgress.create(user, deck)
         learning_progress.learned_items = sorted(record_ids)
         learning_progress.put()
         result = {  'status': 'succeed',

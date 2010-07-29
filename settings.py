@@ -121,4 +121,9 @@ DATABASE_OPTIONS = {
     #'remote_host': 'bla.com',
 }
 
+# integrated profiler
+#~ ENABLE_PROFILER = True
+#~ SORT_PROFILE_RESULTS_BY = 'cumulative' # default is 'time'
+#~ PROFILE_PATTERN = 'ext.db..+\((?:get|get_by_key_name|get_by_id|fetch|count|put)\)'
+
 from ragendja.settings_post import *

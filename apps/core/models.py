@@ -80,17 +80,21 @@ class LearningRecord(db.Model):
             flag = 4 means both ret and acq items, but ret comes first
             flag = 5: shuffle items no other condition
         '''
+        # FIXME: flag
         # limit number of items to MAX_SIZE
         MAX_SIZE = 100
         size  = min(size,MAX_SIZE)
         
         today = datetime.datetime.now(tz=CST).date()
         q = LearningRecord.gql('WHERE _user = :1 AND next_rep <= :2 ORDER BY next_rep', user, today)
-        results = q.fetch(size)
-        results = filter(lambda x:x.acq_reps >= 0, results)
+        results = q.fetch(1000) #FIXME
+        results = filter(lambda x:x.acq_reps > 0, results)
+        if len(results) > size:
+            results = results[0:size]
         #~ raise Exception
         # sort results by card_id
         results.sort(key=lambda x:x.card_id)
+        logging.debug(str([i.card_id for i in results]))
         return results
     
     @classmethod    
@@ -112,6 +116,7 @@ class LearningRecord(db.Model):
         results = q.fetch(size)
         if len(results) >=  size:
             # we have fetched enough records
+            logging.debug('New: ' + str([i.card_id for i in results]))
             return results
         else:
             # create some records
@@ -166,6 +171,7 @@ class LearningRecord(db.Model):
                 count += 1
                 # add to results
                 results.append(r)
+            logging.debug('Created: ' + str([i.card_id for i in results]))
             return results
         
     def update_item(self, user, id, new_grade):
