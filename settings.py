@@ -20,12 +20,12 @@ if on_production_server:
 # Make this unique, and don't share it with anybody.
 SECRET_KEY = '31415926535897932384626'
 
-#ENABLE_PROFILER = True
+ENABLE_PROFILER = True
 #ONLY_FORCED_PROFILE = True
 #PROFILE_PERCENTAGE = 25
-#SORT_PROFILE_RESULTS_BY = 'cumulative' # default is 'time'
+SORT_PROFILE_RESULTS_BY = 'cumulative' # default is 'time'
 # Profile only datastore calls
-#PROFILE_PATTERN = 'ext.db..+\((?:get|get_by_key_name|fetch|count|put)\)'
+PROFILE_PATTERN = 'ext.db..+\((?:get|get_by_key_name|fetch|count|put)\)'
 
 # Enable I18N and set default language to 'en'
 USE_I18N = True
@@ -120,10 +120,5 @@ DATABASE_OPTIONS = {
     # Change domain (default: <remoteid>.appspot.com)
     #'remote_host': 'bla.com',
 }
-
-# integrated profiler
-#~ ENABLE_PROFILER = True
-#~ SORT_PROFILE_RESULTS_BY = 'cumulative' # default is 'time'
-#~ PROFILE_PATTERN = 'ext.db..+\((?:get|get_by_key_name|get_by_id|fetch|count|put)\)'
 
 from ragendja.settings_post import *
