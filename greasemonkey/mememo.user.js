@@ -1999,7 +1999,7 @@ function addMeMemoEntry(item) {
 		$node("div").attr({"class":"content"}).append($node("blockquote").text(item.note)).appendTo(entry);
 		gradeArea = $node("div").attr("class","details").append($node("span").attr("class","legend").text("困难  "));
 		// 添加评分按钮
-		for (var i=1;i<=5;i++) {
+		for (var i=0;i<=5;i++) {
 			gradeBtn = $node("input").attr({"type":"button","class":"input-button","value":i});
 			gradeBtn.hook("click", function (evt) {
 				gradeItem(item._id,evt.target.getAttribute("value"));
