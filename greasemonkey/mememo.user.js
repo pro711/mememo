@@ -5,8 +5,8 @@
 // @include        http://www.renren.com/Home.do*
 // @include        http://localhost*Home.do.html
 // @description    为人人网增加背单词的功能
-// @version        0.1.0.20100730
-// @miniver        5
+// @version        0.1.0.20100802
+// @miniver        6
 // @author         pro711
 // ==/UserScript==
 //
