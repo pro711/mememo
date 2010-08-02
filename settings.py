@@ -20,12 +20,12 @@ if on_production_server:
 # Make this unique, and don't share it with anybody.
 SECRET_KEY = '31415926535897932384626'
 
-ENABLE_PROFILER = True
-#ONLY_FORCED_PROFILE = True
-#PROFILE_PERCENTAGE = 25
-SORT_PROFILE_RESULTS_BY = 'cumulative' # default is 'time'
-# Profile only datastore calls
-PROFILE_PATTERN = 'ext.db..+\((?:get|get_by_key_name|fetch|count|put)\)'
+#~ ENABLE_PROFILER = True
+#~ #ONLY_FORCED_PROFILE = True
+#~ #PROFILE_PERCENTAGE = 25
+#~ SORT_PROFILE_RESULTS_BY = 'cumulative' # default is 'time'
+#~ # Profile only datastore calls
+#~ PROFILE_PATTERN = 'ext.db..+\((?:get|get_by_key_name|fetch|count|put)\)'
 
 # Enable I18N and set default language to 'en'
 USE_I18N = True

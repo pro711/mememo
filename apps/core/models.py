@@ -104,14 +104,14 @@ class LearningRecord(db.Model):
         
         today = datetime.datetime.now(tz=CST).date()
         q = LearningRecord.gql('WHERE _user = :1 AND next_rep <= :2 ORDER BY next_rep', user, today)
-        results = q.fetch(1000) #FIXME
+        results = q.fetch(size)
         results = filter(lambda x:x.acq_reps > 0, results)
         if len(results) > size:
             results = results[0:size]
         #~ raise Exception
         # sort results by card_id
         results.sort(key=lambda x:x.card_id)
-        logging.debug(str([i.card_id for i in results]))
+        logging.debug('Scheduled: ' + str([i.card_id for i in results]))
         return results
     
     @classmethod    
@@ -176,7 +176,7 @@ class LearningRecord(db.Model):
                     card_id = c,
                     date_learn = today,
                     interval = 0,
-                    next_rep = today,
+                    next_rep = None,
                     grade = 0,
                     easiness = 2.5,
                     acq_reps = 0,
@@ -188,7 +188,7 @@ class LearningRecord(db.Model):
                 count += 1
                 # add to results
                 results.append(r)
-            logging.debug('Created: ' + str([i.card_id for i in results]))
+            logging.debug('New & Created: ' + str([i.card_id for i in results]))
             return results
         
     def update_item(self, user, id, new_grade):
@@ -213,6 +213,20 @@ class LearningRecord(db.Model):
         
         self.put()
         return True
+    
+    def skip(self):
+        '''Update an item.'''
+        try:
+            self.interval = 10000
+            self.next_rep = datetime.datetime.now(tz=CST).date() + datetime.timedelta(10000)
+            self.grade    = 5
+            self.easiness = 10.0
+            self.acq_reps = 1 
+            
+            self.put()
+            return True
+        except:
+            return False
     
 class LearningProgress(db.Model):
     '''Learning progress for a deck.'''

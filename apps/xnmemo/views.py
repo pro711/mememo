@@ -25,13 +25,13 @@ from django.utils.translation import ugettext_lazy as _
 from django.utils.encoding import force_unicode,smart_str
 from django.utils import simplejson
 from google.appengine.ext import db
-from google.appengine.api import urlfetch
+from google.appengine.api import urlfetch, quota
 from ragendja.template import render_to_response
 
 from apps.core.models import Card, Deck, LearningRecord, LearningProgress, CST
 
 def range_segment(lst):
-    segment_range = 100
+    segment_range = 20
     list_size = len(lst)
     lst.sort()
     x, y = 0, 0
@@ -95,14 +95,19 @@ def get_items(request):
             new_items_size = size - len(records)
             records += LearningRecord.get_new_items(request.user,0,new_items_size,0,'')
         
+        # quota
+        start = quota.get_request_cpu_usage()
         # prepare response
         record_ids = [i.card_id for i in records]
         logging.debug(str(record_ids))
         #~ logging.debug(str(range_segment(record_ids)))
         for i in range_segment(record_ids):
-            cards = Card.gql('WHERE _id >= :1 and _id <= :2', i[0], i[-1]).fetch(i[-1]-i[0])
-            # filter out unrelated cards
-            cards = filter(lambda x:x._id in i, cards)
+            if len(i) > 1:
+                cards = Card.gql('WHERE _id >= :1 and _id <= :2', i[0], i[-1]).fetch(i[-1]-i[0]+1)
+                # filter out unrelated cards
+                cards = filter(lambda x:x._id in i, cards)
+            else:
+                cards = [Card.gql('WHERE _id = :1', i[0]).get()]
             for card in cards:
                 if card:
                     rr.append({'_id':card._id,
@@ -112,7 +117,9 @@ def get_items(request):
                                 'deck_id':card.deck_id,
                                 'category':card.category
                                 })
-        
+        end = quota.get_request_cpu_usage()
+        logging.info("prepare response cost %d megacycles." % (end - start))
+
         return HttpResponse(simplejson.dumps(result,sort_keys=False))
 
 def update_item(request):
@@ -161,7 +168,40 @@ def update_item(request):
                          }
             return HttpResponse(simplejson.dumps(result))
     
+def skip_item(request):
+    '''Skip an item forever.'''
+    if request.method == 'GET':
+        # check whether logged in
+        if not request.user.is_authenticated():
+            result = {  'status': 'failed',
+                        'message': 'user not authenticated' }
+            return HttpResponse(simplejson.dumps(result))
+        elif not request.user.is_active:
+            result = {  'status': 'failed',
+                        'message': 'user not active' }
+            return HttpResponse(simplejson.dumps(result))
 
+        _id = int(request.GET.get('_id', -1))
+        if _id == -1:
+            result = {  'status': 'failed',
+                        'message': 'error: _id undefined' }
+            return HttpResponse(simplejson.dumps(result))
+        record = LearningRecord.gql('WHERE _user = :1 AND card_id = :2', request.user, _id).get()
+        if not record:
+            result = {  'status': 'failed',
+                        'message': 'error: _id not found' }
+            return HttpResponse(simplejson.dumps(result))
+        
+        if record.skip():
+            result = {  'status': 'succeed',
+                        'message': 'skipping item id=%d succeeded.' % (_id,),
+                         }
+            return HttpResponse(simplejson.dumps(result))
+        else:
+            result = {  'status': 'failed',
+                        'message': 'skipping item id=%d failed.' % (_id,),
+                         }
+            return HttpResponse(simplejson.dumps(result))
 
     
 def mark_items(request):
@@ -209,7 +249,7 @@ def mark_items(request):
                 card_id = c._id,
                 date_learn = today,
                 interval = 0,
-                next_rep = today,
+                next_rep = None,
                 grade = 0,
                 easiness = 2.5,
                 acq_reps = 0,

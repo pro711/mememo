@@ -38,8 +38,8 @@ CST = FixedOffset(480,"China Standard Time")
 
 class Item(object):
     def __init__(self, card, record=None):
-        if not card:
-            raise TypeError, 'card should not be None'
+        #~ if not card:
+            #~ raise TypeError, 'card should not be None'
         if not record:
             # new record
             #~ self.date_learn = datetime.datetime.now()

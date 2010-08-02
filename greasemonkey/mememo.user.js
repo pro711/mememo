@@ -61,8 +61,8 @@ if ($page('home',MEM.url)) {
 }
 
 // 版本，对应@version和@miniver，用于升级相关功能
-MEM.version="0.1.0.20100730";
-MEM.miniver=5;
+MEM.version="0.1.0.20100802";
+MEM.miniver=6;
 
 // 存储空间，用于保存全局性变量
 MEM.storage={};
@@ -1980,8 +1980,28 @@ function gradeItem(id, newGrade) {
 	}
 }
 
-
-
+// 永久跳过条目
+function skipItem(id) {
+	if (!id) {
+		alert("id cannot be empty!");
+		return;
+	}
+	else {
+		$get(MEM.server + "xnmemo/skip_item/?"+"_id="+id,function(html) {
+			if(!html) {
+				alert("skipItem failed.");
+				return;
+			}
+			var result=JSON.parse(html).status;
+			if (result == "failed") {
+				alert("skipItem failed.");
+			}
+			else if (result == "succeed") {
+				$popup("MeMemo","skipItem succeeded.",null,3,10);
+			}
+		});
+	}
+}
 
 // 添加MeMemo条目
 function addMeMemoEntry(item) {
@@ -2010,6 +2030,14 @@ function addMeMemoEntry(item) {
 			//~ $node("span").attr("class", "seperator").text("|").appendTo(gradeArea);
 		}
 		$node("span").attr("class","legend").text("  简单").appendTo(gradeArea);
+		// 添加跳过按钮
+		skipBtn = $node("input").attr({"type":"button","class":"input-button","value":"永久跳过","style":"position: absolute; right: 0pt;"});
+		skipBtn.hook("click", function (evt) {
+			skipItem(item._id);
+			// delete item from page
+			$ban(evt.target.parentNode.parentNode);
+			});
+		skipBtn.appendTo(gradeArea);
 		gradeArea.appendTo(entry);
 		entry.appendTo($("#meMemoFeedHome"));
 	}
