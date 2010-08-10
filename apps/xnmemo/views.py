@@ -136,8 +136,8 @@ def update_item(request):
             return HttpResponse(simplejson.dumps(result))
 
         _id = int(request.GET.get('_id', -1))
-        new_grade = int(request.GET.get('new_grade', 0))
-        if _id == -1 or not new_grade:
+        new_grade = int(request.GET.get('new_grade', -1))
+        if _id == -1 or new_grade == -1:
             result = {  'status': 'failed',
                         'message': 'error: _id or new_grade undefined' }
             return HttpResponse(simplejson.dumps(result))

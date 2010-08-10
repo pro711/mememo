@@ -1926,7 +1926,7 @@ function hasScheduledItems() {
 			return;
 		}
 		if (data.scheduled_items > 0) {
-			$popup("MeMemo",'您今天有 ' + data.scheduled_items + ' 个单词需要复习',null,10,10);
+			$popup("MeMemo",'您今天有 ' + data.scheduled_items + (data.scheduled_items==100?'(+)':'') + ' 个单词需要复习',null,10,10);
 			return data.scheduled_items;
 		}
 	});
@@ -2009,14 +2009,22 @@ function addMeMemoEntry(item) {
 		var entry=$node("li").attr("id","memoItem_" + item._id);
 		var h3 = $node("h3")
 		$node("").text(item.question).appendTo(h3);
-		$node("span").attr({"class":"statuscmtitem",
-							"onmouseout":"$('memoAnswer_" + item._id +"').hide()",
-							"onmouseover":"$('memoAnswer_" + item._id +"').show()",
-							}).text("解释：").append($node("span").attr(
+		var answer = $node("span").attr({"class":"statuscmtitem",
+							}).text("解释：");
+		answer.append($node("span").attr(
 							{"style":"display: none;",
-							"id":"memoAnswer_" + item._id}).text(item.answer)).appendTo(h3);
+							"id":"memoAnswer_" + item._id}).text(item.answer));
+		answer.hook('mouseover', function (evt) {
+			$('#memoAnswer_' + item._id).show();
+			$('#memoNote_' + item._id).attr("style","color:#333333");
+		}).hook('mouseout', function (evt) {
+			$('#memoAnswer_' + item._id).hide();
+			$('#memoNote_' + item._id).attr("style","color:#FFFFFF");
+		});
+		answer.appendTo(h3);
 		h3.appendTo(entry);
-		$node("div").attr({"class":"content"}).append($node("blockquote").text(item.note)).appendTo(entry);
+		var note = $node("blockquote").attr({"style":"color:#FFFFFF","id":"memoNote_" + item._id}).text(item.note);
+		$node("div").attr({"class":"content"}).append(note).appendTo(entry);
 		gradeArea = $node("div").attr("class","details").append($node("span").attr("class","legend").text("困难  "));
 		// 添加评分按钮
 		for (var i=0;i<=5;i++) {
