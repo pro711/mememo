@@ -3,10 +3,12 @@
 // @namespace      mememo
 // @include        http://renren.com/Home.do*
 // @include        http://www.renren.com/Home.do*
+// @include        http://renren.com/home*
+// @include        http://www.renren.com/home*
 // @include        http://localhost*Home.do.html
 // @description    为人人网增加背单词的功能
-// @version        0.1.0.20100802
-// @miniver        6
+// @version        0.1.1.20100819
+// @miniver        11
 // @author         pro711
 // ==/UserScript==
 //
@@ -61,8 +63,8 @@ if ($page('home',MEM.url)) {
 }
 
 // 版本，对应@version和@miniver，用于升级相关功能
-MEM.version="0.1.0.20100802";
-MEM.miniver=6;
+MEM.version="0.1.1.20100819";
+MEM.miniver=11;
 
 // 存储空间，用于保存全局性变量
 MEM.storage={};
@@ -1900,8 +1902,10 @@ PageKit.prototype={
 
 // 添加导航栏标签
 function addToNavigateBar() {
-	var entry=$node("li").attr("id","showMeMemo").append($node("a").attr({href:"javascript:;",onfocus:"this.blur();"}).text("MeMemo"));
-	entry.appendTo($(".feed-header .feed-filter"));
+	//~ var entry=$node("a").attr({"id":"showMeMemo","class":"news-feed-type","href":"javascript:;"}).text("MeMemo");
+	//~ entry.appendTo($("#newsFeedTypes"));
+	var entry=$node("div").attr({"id":"showMeMemo","style":"position:relative; z-index:999;"}).append($node("a").attr({"href":"javascript:;","style":"right:190px; top:-30px; position:absolute;"}).text("MeMemo"));
+	$("#feedHolder").insert(entry,1);
 };
 
 // 清除Feeds
@@ -2028,7 +2032,7 @@ function addMeMemoEntry(item) {
 		gradeArea = $node("div").attr("class","details").append($node("span").attr("class","legend").text("困难  "));
 		// 添加评分按钮
 		for (var i=0;i<=5;i++) {
-			gradeBtn = $node("input").attr({"type":"button","class":"input-button","value":i});
+			gradeBtn = $node("input").attr({"type":"button","class":"input-button","value":i}).style({"padding":"2px 15px"});
 			gradeBtn.hook("click", function (evt) {
 				gradeItem(item._id,evt.target.getAttribute("value"));
 				// delete item from page
@@ -2079,13 +2083,11 @@ switch(MEM.agent) {
 	case USERSCRIPT:
 		main(JSON.parse(GM_getValue("mem_options","{}")));
 		addToNavigateBar();
-		hasScheduledItems();
-		$("#showMeMemo a").hook("click",function (evt) {
-			$("#showMeMemo").attr({"class":"current"});
+		$("#showMeMemo").hook("click",function (evt) {
 			removeFeeds();
 			getScheduledItems();
 			});
-
+		hasScheduledItems();
 		break;
 	default:
 		throw "unsupported browser";

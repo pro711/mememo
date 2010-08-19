@@ -103,7 +103,7 @@ class LearningRecord(db.Model):
         size  = min(size,MAX_SIZE)
         
         today = datetime.datetime.now(tz=CST).date()
-        q = LearningRecord.gql('WHERE _user = :1 AND next_rep <= :2 ORDER BY next_rep', user, today)
+        q = LearningRecord.gql('WHERE _user = :1 AND next_rep <= :2 AND next_rep > NULL ORDER BY next_rep', user, today)
         results = q.fetch(size)
         results = filter(lambda x:x.acq_reps > 0, results)
         if len(results) > size:
