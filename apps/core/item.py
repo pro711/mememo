@@ -80,7 +80,7 @@ class Item(object):
             noise = random.randint(-3,3)
         else:
             a = .05 * interval
-            noise = round(random.uniform(-a,a))
+            noise = int(round(random.uniform(-a,a)))
 
         return noise
     
