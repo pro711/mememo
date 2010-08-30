@@ -26,6 +26,7 @@ from django.utils.encoding import force_unicode,smart_str
 from django.utils import simplejson
 from google.appengine.ext import db
 from google.appengine.api import urlfetch, quota
+from google.appengine.api.labs import taskqueue
 from ragendja.template import render_to_response
 
 from apps.core.models import Card, Deck, LearningRecord, LearningProgress, CST
@@ -238,15 +239,46 @@ def mark_items(request):
         q_card = Card.all()
         q_card.filter('question >',w_from).filter('question <=',w_to)
         new_cards = q_card.fetch(MAX_SIZE)
-        # create learning records for these cards
-        today = datetime.datetime.now(tz=CST).date()
+
         count = 0
-        for c in new_cards:
-            if LearningRecord.gql('WHERE _user = :1 AND card_id = :2', request.user, c._id).get():
+        new_cards_ids = [c._id for c in new_cards]
+        for g in range_segment(new_cards_ids):
+            # Add the task to the mark-items-queue queue.
+            taskqueue.add(queue_name='mark-items-queue', 
+                url='/xnmemo/mark_items_worker/',
+                params={'username': request.user.username,
+                        'card_ids': '_'.join([str(c) for c in g])})
+            count += len(g)
+        
+        result = {  'status': 'succeed',
+                    'message': '%d records queued to be created.' % count }
+        return HttpResponse(simplejson.dumps(result))
+
+def mark_items_worker(request):
+    '''Worker for mark_items.'''
+    if request.method == 'POST':
+        username = request.POST.get('username', '')
+        card_ids_joined = request.POST.get('card_ids', '')
+        card_ids = [int(c) for c in card_ids_joined.split('_')]
+        # get user
+        user = User.gql('WHERE username = :1', username).get()
+        if not user:
+            result = {  'status': 'failed',
+                        'message': 'user does not exist' }
+            return HttpResponse(simplejson.dumps(result))
+        
+        # create learning record
+        today = datetime.datetime.now(tz=CST).date()
+        # get learning progress
+        learning_progress = LearningProgress.gql('WHERE _user = :1', user).get()
+
+        for card_id in card_ids:
+            if LearningRecord.gql('WHERE _user = :1 AND card_id = :2', user, card_id).get():
                 # record already exists
                 continue
-            r = LearningRecord(_user = request.user,
-                card_id = c._id,
+
+            r = LearningRecord(_user = user,
+                card_id = card_id,
                 date_learn = today,
                 interval = 0,
                 next_rep = None,
@@ -258,14 +290,13 @@ def mark_items(request):
                 acq_reps_since_lapse = 0,
                 ret_reps_since_lapse = 0)
             r.put()
-            count += 1
             # append to learning progress
-            learning_progress.learned_items.append(c._id)
+            learning_progress.learned_items.append(card_id)
         # update learning record
         learning_progress.put()
-        
+        # prepare response
         result = {  'status': 'succeed',
-                    'message': '%d records created' % count }
+                    'message': 'learning record for card %s created.' % card_ids_joined }
         return HttpResponse(simplejson.dumps(result))
         
 def get_stats(request):
