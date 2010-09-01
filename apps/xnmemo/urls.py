@@ -11,5 +11,6 @@ urlpatterns = patterns('apps.xnmemo.views',
     (r'^mark_items_worker/$', 'mark_items_worker'),
     (r'^get_stats/$', 'get_stats'),
     (r'^update_learning_progress/$', 'update_learning_progress'),
+    (r'^flush_cache/$', 'flush_cache'),
     #~ (r'^(?P<lesson_id>\d+)/$', 'lesson_detail'),
 )

@@ -25,7 +25,7 @@ from django.utils.translation import ugettext_lazy as _
 from django.utils.encoding import force_unicode,smart_str
 from django.utils import simplejson
 from google.appengine.ext import db
-from google.appengine.api import urlfetch, quota
+from google.appengine.api import urlfetch, quota, memcache
 from google.appengine.api.labs import taskqueue
 from ragendja.template import render_to_response
 
@@ -79,37 +79,75 @@ def get_items(request):
         rr = result['records']  # shortcut
         today = datetime.datetime.now(tz=CST).date()
         size = int(request.GET.get('size', 20))
-        # get learning progress
-        learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
-        if not learning_progress:
-            # get deck first
-            deck = Deck.gql('WHERE _id = 1').get()  #FIXME: GRE
-            if not deck:
-                logging.error('deck not found')
-                raise Exception, 'deck not found'
-            learning_progress = LearningProgress.create(request.user, deck)
         
+        # quota
+        start = quota.get_request_cpu_usage()
+        # get learning progress
+        learning_progress = memcache.get('learning_progress'+request.user.username)
+        if learning_progress is not None:
+            pass
+        else:
+            learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
+            if not learning_progress:
+                # get deck first
+                deck = Deck.gql('WHERE _id = 1').get()  #FIXME: GRE
+                if not deck:
+                    logging.error('deck not found')
+                    raise Exception, 'deck not found'
+                learning_progress = LearningProgress.create(request.user, deck)
+            # put into memcache
+            memcache.add('learning_progress'+request.user.username,learning_progress,3600)
+        end = quota.get_request_cpu_usage()
+        logging.info("get learning_progress cost %d megacycles." % (end - start))
+
+        
+        # quota
+        start = quota.get_request_cpu_usage()
         # get scheduled items first
         records = LearningRecord.get_scheduled_items(request.user,0,size,0,'')
         if len(records) < size:
             # get some new items
             new_items_size = size - len(records)
             records += LearningRecord.get_new_items(request.user,0,new_items_size,0,'')
+        end = quota.get_request_cpu_usage()
+        logging.info("fetch items cost %d megacycles." % (end - start))
         
         # quota
         start = quota.get_request_cpu_usage()
         # prepare response
         record_ids = [i.card_id for i in records]
-        logging.debug(str(record_ids))
-        #~ logging.debug(str(range_segment(record_ids)))
+        logging.debug('All: '+str(record_ids))
+
+        # check memcache first
+        cached = []
+        for i in record_ids:
+            card = memcache.get(key='mememo_card'+str(i))
+            if card is not None:
+                rr.append({'_id':card._id,
+                            'question':card.question,
+                            'answer':card.answer,
+                            'note':card.note,
+                            'deck_id':card.deck_id,
+                            'category':card.category
+                            })
+                cached.append(i)
+        record_ids = list(set(record_ids) - set(cached))
+        logging.debug('fetching cards from datestore: '+str(record_ids))
+        # otherwise we have to fetch them from datastore
         for i in range_segment(record_ids):
             if len(i) > 1:
                 cards = Card.gql('WHERE _id >= :1 and _id <= :2', i[0], i[-1]).fetch(i[-1]-i[0]+1)
                 # filter out unrelated cards
                 cards = filter(lambda x:x._id in i, cards)
-            else:
+            elif len(i) == 1:
                 cards = [Card.gql('WHERE _id = :1', i[0]).get()]
+            else:
+                continue
+            
+            # add to memcache
             for card in cards:
+                if not memcache.set(key='mememo_card'+str(card._id), value=card, time=7200):
+                    logging.error('memcache set item failed: '+ str(card._id))
                 if card:
                     rr.append({'_id':card._id,
                                 'question':card.question,
@@ -330,4 +368,12 @@ def update_learning_progress(request):
         result = {  'status': 'succeed',
                     'message': 'learning_progress updated' }
         return HttpResponse(simplejson.dumps(result))
+
+def flush_cache(request):
+    '''Flush memcache.'''
+    if memcache.flush_all():
+        return HttpResponse('Flush cache success.')
+    else:
+        return HttpResponse('Flush cache failed.')
+    
         
