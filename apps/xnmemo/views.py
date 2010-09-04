@@ -340,6 +340,27 @@ def mark_items_worker(request):
 def get_stats(request):
     '''Learning statistics.'''
     
+def get_learning_progress(request):
+    if request.method == 'GET':
+        # check whether logged in
+        if not request.user.is_authenticated():
+            result = {  'status': 'failed',
+                        'message': 'user not authenticated' }
+            return HttpResponse(simplejson.dumps(result))
+        elif not request.user.is_active:
+            result = {  'status': 'failed',
+                        'message': 'user not active' }
+            return HttpResponse(simplejson.dumps(result))
+        # get learning progress
+        learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
+        if learning_progress:
+            result = {  'status': 'succeed',
+                        'learned_items': learning_progress.learned_items }
+        else:
+            result = {  'status': 'failed',
+                        'message': 'learning_progress not found' }
+        return HttpResponse(simplejson.dumps(result))
+
 def update_learning_progress(request):
     if request.method == 'GET':
         username = request.GET.get('user', '')
