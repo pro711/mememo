@@ -7,5 +7,5 @@ runserver.sh
 dev_appserver.datastore
 
 syntax: regexp
-^common/
+^appengine/common/
 ^tools/
