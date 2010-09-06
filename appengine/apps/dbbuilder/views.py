@@ -115,9 +115,7 @@ def csv_import(request, dbfile, deckname, deckdesc):
     csvf = open(os.path.join(curpath,dbfile),'r')
     csv_reader = UnicodeReader(csvf, delimiter='\t', quotechar='|', quoting=csv.QUOTE_MINIMAL)
     
-    q = Deck.all()
-    q.filter("name =", deckname)
-    deck = q.get()
+    deck = Deck.all().filter("name =", deckname).get()
     if not deck:
         # determine deck id
         q = Deck.all()
@@ -126,31 +124,47 @@ def csv_import(request, dbfile, deckname, deckdesc):
         if len(results) == 0:
             last_id = 0
         else:
-            last_id = results[0].book_id
-        new_id = last_id + 1
+            last_id = results[0]._id
+        new_deck_id = last_id + 1
         # create a new deck
         volume = 0
-        deck = Deck(_id=new_id, name=deckname,description=deckdesc,volume=0)
+        deck = Deck(_id=new_deck_id, name=deckname,description=deckdesc,volume=0)
         deck.put()
     else:
         volume = deck.volume
+    # get last card of deck
+    last_card_from_deck = Card.gql('WHERE deck_id = :1 ORDER BY _id DESC', deck._id).get()
+    
+    # calculate first_card_id, which is the first card id of the current deck
+    # and start_card_id, which import process in this request starts from
+    if not last_card_from_deck:
+        # deck is currently empty
+        last_card = Card.gql('ORDER BY _id DESC').get()
+        if last_card:
+            first_card_id = last_card._id + 1
+        else:
+            first_card_id = 1
+        start_card_id = first_card_id
+    else:
+        first_card_id = Card.gql('WHERE deck_id = :1 ORDER BY _id', deck._id).get()._id
+        start_card_id = last_card_from_deck._id + 1
+    
     # import cards from sqlite database, 500 cards per session
-    start_card = volume + 1
-    t = (start_card,)
     count = 0
     for row in csv_reader:
-        if int(row[0]) >= start_card:
-            card = Card(_id=int(row[0]), question=row[1], answer = row[2], note = row[3],
+        if int(row[0]) > start_card_id - first_card_id:
+            card = Card(_id=int(row[0])+first_card_id-1, question=row[1], answer = row[2], note = row[3],
                     deck_id=deck._id, category=row[4])
             card.put()
             count += 1
-            if count >= 300:
+            if count >= 200:
                 break
     # update volume
     deck.volume += count
     deck.put()
     return HttpResponse('%d cards imported.' % (count,))
     
+ 
 def db_import(request):
     if request.method == 'GET':
         dbfile = request.GET.get('dbfile',None)

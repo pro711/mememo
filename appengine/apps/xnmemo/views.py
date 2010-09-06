@@ -17,6 +17,7 @@
 #
 
 import datetime, logging
+from functools import wraps
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
@@ -24,15 +25,16 @@ from django.http import HttpResponseRedirect,Http404, HttpResponseForbidden,Http
 from django.utils.translation import ugettext_lazy as _
 from django.utils.encoding import force_unicode,smart_str
 from django.utils import simplejson
+from django.views.decorators.http import require_GET, require_POST
 from google.appengine.ext import db
 from google.appengine.api import urlfetch, quota, memcache
 from google.appengine.api.labs import taskqueue
 from ragendja.template import render_to_response
 
 from apps.core.models import Card, Deck, LearningRecord, LearningProgress, CST
+from rangelist import RangeList
 
-def range_segment(lst):
-    segment_range = 20
+def range_segment(lst, segment_range=20):
     list_size = len(lst)
     lst.sort()
     x, y = 0, 0
@@ -43,6 +45,34 @@ def range_segment(lst):
             yield lst[x:y]
             x = y
     yield lst[x:y]
+
+
+def http_get(f):
+    def forbidden(request):
+        return HttpResponseForbidden('ONLY GET IS ALLOWED')
+    @wraps(f)
+    def wrapper(request, *args, **kwds):
+        if request.method == 'GET':
+            return f(request, *args, **kwds)
+        else:
+            return HttpResponseForbidden('ONLY GET IS ALLOWED')
+    return wrapper
+
+def require_login(f):
+    @wraps(f)
+    def wrapper(request, *args, **kwds):
+        # check whether logged in
+        if not request.user.is_authenticated():
+            result = {  'status': 'failed',
+                        'message': 'user not authenticated' }
+            return HttpResponse(simplejson.dumps(result))
+        elif not request.user.is_active:
+            result = {  'status': 'failed',
+                        'message': 'user not active' }
+            return HttpResponse(simplejson.dumps(result))
+        else:
+            return f(request, *args, **kwds)
+    return wrapper
 
 def has_scheduled_items(request):
     if request.method == 'GET':
@@ -309,7 +339,7 @@ def mark_items_worker(request):
         today = datetime.datetime.now(tz=CST).date()
         # get learning progress
         learning_progress = LearningProgress.gql('WHERE _user = :1', user).get()
-
+        learned_items_list = RangeList.decode(learning_progress.learned_items)
         for card_id in card_ids:
             if LearningRecord.gql('WHERE _user = :1 AND card_id = :2', user, card_id).get():
                 # record already exists
@@ -329,8 +359,9 @@ def mark_items_worker(request):
                 ret_reps_since_lapse = 0)
             r.put()
             # append to learning progress
-            learning_progress.learned_items.append(card_id)
+            learned_items_list.append(card_id)
         # update learning record
+        learning_progress.learned_items = RangeList.encode(learned_items_list)
         learning_progress.put()
         # prepare response
         result = {  'status': 'succeed',
@@ -339,27 +370,21 @@ def mark_items_worker(request):
         
 def get_stats(request):
     '''Learning statistics.'''
-    
+
+@require_GET
+@require_login
 def get_learning_progress(request):
-    if request.method == 'GET':
-        # check whether logged in
-        if not request.user.is_authenticated():
-            result = {  'status': 'failed',
-                        'message': 'user not authenticated' }
-            return HttpResponse(simplejson.dumps(result))
-        elif not request.user.is_active:
-            result = {  'status': 'failed',
-                        'message': 'user not active' }
-            return HttpResponse(simplejson.dumps(result))
-        # get learning progress
-        learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
-        if learning_progress:
-            result = {  'status': 'succeed',
-                        'learned_items': learning_progress.learned_items }
-        else:
-            result = {  'status': 'failed',
-                        'message': 'learning_progress not found' }
-        return HttpResponse(simplejson.dumps(result))
+    # get learning progress
+    learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
+    if learning_progress:
+        learned_items_list = RangeList.decode(learning_progress.learned_items)
+        result = {  'status': 'succeed',
+                    'learned_items': learned_items_list,
+                    'learned_items_count': len(learned_items_list) }
+    else:
+        result = {  'status': 'failed',
+                    'message': 'learning_progress not found' }
+    return HttpResponse(simplejson.dumps(result))
 
 def update_learning_progress(request):
     if request.method == 'GET':
@@ -384,11 +409,41 @@ def update_learning_progress(request):
                 logging.error('deck not found')
                 raise Exception, 'deck not found'
             learning_progress = LearningProgress.create(user, deck)
-        learning_progress.learned_items = sorted(record_ids)
+        learning_progress.learned_items = RangeList.encode(sorted(record_ids))
         learning_progress.put()
         result = {  'status': 'succeed',
                     'message': 'learning_progress updated' }
         return HttpResponse(simplejson.dumps(result))
+
+@require_login
+def change_deck(request):
+    if request.method == 'GET':
+        decks = Deck.all().fetch(1000)
+        active_learning_progress = LearningProgress.gql('WHERE _user = :1 AND active = TRUE', request.user).get()
+        if active_learning_progress:
+            current_deck = active_learning_progress._deck
+        else:
+            current_deck = None
+        template_vals = {'current_deck': current_deck,
+            'decks': decks}
+        return render_to_response(request, 'xnmemo/change_deck.html', template_vals)
+    elif request.method == 'POST':
+        pass
+        #~ return HttpResponse(simplejson.dumps(result))
+
+def fix_learning_progress(request):
+    lps = LearningProgress.all().fetch(1000)
+    for lp in lps:
+        lp.active = True
+        lp.put()
+    return HttpResponse('%d LearningProgresses fixed.' % (len(lps),))
+
+def convert_learning_progress(request):
+    lps = LearningProgress.all().fetch(1000)
+    for lp in lps:
+        lp.learned_items = RangeList.encode(lp.learned_items)
+        lp.put()
+    return HttpResponse('%d LearningProgresses fixed.' % (len(lps),))
 
 def flush_cache(request):
     '''Flush memcache.'''

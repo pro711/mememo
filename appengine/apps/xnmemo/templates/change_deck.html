@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% load i18n %}
+{% block title %} {% trans "Change deck" %} {% endblock %}
+
+{% block css %}
+{% endblock %}
+
+{% block header %}
+<div id="wrapper">
+
+{% include "header.html" %}
+
+{% endblock %}
+
+{% block content %}
+{% load deck_filter %}
+<h1>{% trans "Please choose a deck:" %}</h1>
+<form action="." method="post">
+    <select id="choose-deck">
+    {% for deck in decks %}
+    {% ifequal deck current_deck %}
+        <option selected='selected' value="{{ deck|get_deck_id }}">{{ deck.name }}</option>
+    {% endifequal %}
+    {% ifnotequal deck current_deck %}
+        <option value="{{ deck|get_deck_id }}">{{ deck.name }}</option>
+    {% endifnotequal %}
+    {% endfor %}
+    </select>
+    <input type="submit" value="Go" />
+</form>
+{% endblock content %}
+
+{% block footer %}
+{% include "footer.html" %}
+</div>
+
+{% endblock %}

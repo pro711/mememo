@@ -23,6 +23,7 @@ from django.contrib.auth.models import User
 import random, datetime, logging
 
 from apps.core.item import Item
+from apps.xnmemo.rangelist import RangeList
 
 class FixedOffset(datetime.tzinfo):
     """Fixed offset in minutes east from UTC."""
@@ -147,12 +148,15 @@ class LearningRecord(db.Model):
                 return results
             new_cards = []
             count = 0
+            learned_items_list = RangeList.decode(lp.learned_items)
+            logging.debug(str(learned_items_list))
             for i in range(1, lp._deck.volume):
-                if i not in lp.learned_items:
+                if i not in learned_items_list:
                     new_cards.append(i)
                     count += 1
                     if count == new_items_size:
-                        lp.learned_items += new_cards
+                        learned_items_list += new_cards
+                        lp.learned_items = RangeList.encode(learned_items_list)
                         lp.put()
                         break
                 
@@ -235,6 +239,7 @@ class LearningProgress(db.Model):
     date_start = db.DateProperty(auto_now_add=True)
     date_learn = db.DateProperty(auto_now=True)
     learned_items = db.ListProperty(long)
+    active = db.BooleanProperty()
     
     def __unicode__(self):
         return '%s' % (self._user)
