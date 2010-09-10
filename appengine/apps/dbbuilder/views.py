@@ -2,6 +2,7 @@
 
 import os,logging,csv,codecs,cStringIO
 from django.http import HttpResponseRedirect,Http404,HttpResponseForbidden,HttpResponse,HttpResponseNotFound
+from django.views.decorators.http import require_GET, require_POST
 from django.utils.translation import ugettext as _
 from ragendja.template import render_to_response
 
@@ -159,11 +160,13 @@ def csv_import(request, dbfile, deckname, deckdesc):
             count += 1
             if count >= 200:
                 break
-    # update volume
+    # update volume, first_card_id, last_card_id
     deck.volume += count
+    deck.first_card_id = first_card_id
+    deck.last_card_id = first_card_id + deck.volume - 1
     deck.put()
     return HttpResponse('%d cards imported.' % (count,))
-    
+
  
 def db_import(request):
     if request.method == 'GET':
@@ -188,3 +191,26 @@ def remove_duplicates(request):
                 card.delete()
                 count += 1
         return HttpResponse('%d duplicates removed.' % (count,))
+
+@require_GET
+def fix_deck_info(request):
+    deck_id = int(request.GET.get('deck_id',0))
+    if deck_id == 0:
+        return HttpResponse('deck_id not specified.')
+    
+    deck = Deck.all().filter("_id =", deck_id).get()
+    if not deck:
+        return HttpResponse('deck %d not found.' % (deck_id,))
+    # get last card of deck
+    last_card_from_deck = Card.gql('WHERE deck_id = :1 ORDER BY _id DESC', deck._id).get()
+    
+    # calculate first_card_id, which is the first card id of the current deck
+    if not last_card_from_deck:
+        # deck is currently empty
+        deck.first_card_id = deck.last_card_id = None
+        deck.put()
+    else:
+        deck.first_card_id = Card.gql('WHERE deck_id = :1 ORDER BY _id', deck._id).get()._id
+        deck.last_card_id = last_card_from_deck._id
+        deck.put()
+    return HttpResponse('Deck %d fixed. first_card_id: %s, last_card_id: %s' % (deck_id,deck.first_card_id,deck.last_card_id))

@@ -74,85 +74,101 @@ def require_login(f):
             return f(request, *args, **kwds)
     return wrapper
 
+@require_GET
+@require_login
 def has_scheduled_items(request):
-    if request.method == 'GET':
-        # check whether logged in
-        if not request.user.is_authenticated():
-            result = {  'status': 'failed',
-                        'message': 'user not authenticated' }
-            return HttpResponse(simplejson.dumps(result))
-        elif not request.user.is_active:
-            result = {  'status': 'failed',
-                        'message': 'user not active' }
-            return HttpResponse(simplejson.dumps(result))
-        
-        result = {}
-        s_items = LearningRecord.get_scheduled_items(request.user,0,100,0,'')
-        result['scheduled_items'] = len(s_items)
-        return HttpResponse(simplejson.dumps(result))
+    limit = int(request.GET.get('limit', 0))
+    size = limit if limit else 100
+    result = {}
+    s_items = LearningRecord.get_scheduled_items(request.user,0,100,0,'')
+    result['scheduled_items_count'] = len(s_items)
+    result['scheduled_items'] = [item.card_id for item in s_items]
+    return HttpResponse(simplejson.dumps(result))
         
 
+@require_GET
+@require_login
 def get_items(request):
-    if request.method == 'GET':
-        # check whether logged in
-        if not request.user.is_authenticated():
-            result = {  'status': 'failed',
-                        'message': 'user not authenticated' }
-            return HttpResponse(simplejson.dumps(result))
-        elif not request.user.is_active:
-            result = {  'status': 'failed',
-                        'message': 'user not active' }
-            return HttpResponse(simplejson.dumps(result))
-        
-        result = {}
-        result['records'] = []
-        rr = result['records']  # shortcut
-        today = datetime.datetime.now(tz=CST).date()
-        size = int(request.GET.get('size', 20))
-        
-        # quota
-        start = quota.get_request_cpu_usage()
-        # get learning progress
-        learning_progress = memcache.get('learning_progress'+request.user.username)
-        if learning_progress is not None:
-            pass
+    result = {}
+    result['records'] = []
+    rr = result['records']  # shortcut
+    today = datetime.datetime.now(tz=CST).date()
+    size = int(request.GET.get('size', 20))
+    
+    # quota
+    start = quota.get_request_cpu_usage()
+    # get learning progress
+    learning_progress = memcache.get('learning_progress'+request.user.username)
+    if learning_progress is not None:
+        pass
+    else:
+        learning_progress = LearningProgress.gql('WHERE _user = :1 AND active = TRUE', request.user).get()
+        if not learning_progress:
+            # get deck first
+            deck = Deck.gql('WHERE _id = 1').get()  #FIXME: GRE
+            if not deck:
+                logging.error('deck not found')
+                raise Exception, 'deck not found'
+            learning_progress = LearningProgress.create(request.user, deck)
+            learning_progress.active = True
+            learning_progress.put()
+        # put into memcache
+        memcache.add('learning_progress'+request.user.username,learning_progress,3600)
+    
+    deck = learning_progress._deck
+    
+    end = quota.get_request_cpu_usage()
+    logging.info("get learning_progress cost %d megacycles." % (end - start))
+
+    
+    # quota
+    start = quota.get_request_cpu_usage()
+    # get scheduled items first
+    records = LearningRecord.get_scheduled_items(request.user,deck,0,size,0,'')
+    if len(records) < size:
+        # get some new items
+        new_items_size = size - len(records)
+        records += LearningRecord.get_new_items(request.user,deck,0,new_items_size,0,'')
+    end = quota.get_request_cpu_usage()
+    logging.info("fetch items cost %d megacycles." % (end - start))
+    
+    # quota
+    start = quota.get_request_cpu_usage()
+    # prepare response
+    record_ids = [i.card_id for i in records]
+    logging.debug('All: '+str(record_ids))
+
+    # check memcache first
+    cached = []
+    for i in record_ids:
+        card = memcache.get(key='mememo_card'+str(i))
+        if card is not None:
+            rr.append({'_id':card._id,
+                        'question':card.question,
+                        'answer':card.answer,
+                        'note':card.note,
+                        'deck_id':card.deck_id,
+                        'category':card.category
+                        })
+            cached.append(i)
+    record_ids = list(set(record_ids) - set(cached))
+    logging.debug('fetching cards from datestore: '+str(record_ids))
+    # otherwise we have to fetch them from datastore
+    for i in range_segment(record_ids):
+        if len(i) > 1:
+            cards = Card.gql('WHERE _id >= :1 and _id <= :2', i[0], i[-1]).fetch(i[-1]-i[0]+1)
+            # filter out unrelated cards
+            cards = filter(lambda x:x._id in i, cards)
+        elif len(i) == 1:
+            cards = [Card.gql('WHERE _id = :1', i[0]).get()]
         else:
-            learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
-            if not learning_progress:
-                # get deck first
-                deck = Deck.gql('WHERE _id = 1').get()  #FIXME: GRE
-                if not deck:
-                    logging.error('deck not found')
-                    raise Exception, 'deck not found'
-                learning_progress = LearningProgress.create(request.user, deck)
-            # put into memcache
-            memcache.add('learning_progress'+request.user.username,learning_progress,3600)
-        end = quota.get_request_cpu_usage()
-        logging.info("get learning_progress cost %d megacycles." % (end - start))
-
+            continue
         
-        # quota
-        start = quota.get_request_cpu_usage()
-        # get scheduled items first
-        records = LearningRecord.get_scheduled_items(request.user,0,size,0,'')
-        if len(records) < size:
-            # get some new items
-            new_items_size = size - len(records)
-            records += LearningRecord.get_new_items(request.user,0,new_items_size,0,'')
-        end = quota.get_request_cpu_usage()
-        logging.info("fetch items cost %d megacycles." % (end - start))
-        
-        # quota
-        start = quota.get_request_cpu_usage()
-        # prepare response
-        record_ids = [i.card_id for i in records]
-        logging.debug('All: '+str(record_ids))
-
-        # check memcache first
-        cached = []
-        for i in record_ids:
-            card = memcache.get(key='mememo_card'+str(i))
-            if card is not None:
+        # add to memcache
+        for card in cards:
+            if not memcache.set(key='mememo_card'+str(card._id), value=card, time=7200):
+                logging.error('memcache set item failed: '+ str(card._id))
+            if card:
                 rr.append({'_id':card._id,
                             'question':card.question,
                             'answer':card.answer,
@@ -160,36 +176,10 @@ def get_items(request):
                             'deck_id':card.deck_id,
                             'category':card.category
                             })
-                cached.append(i)
-        record_ids = list(set(record_ids) - set(cached))
-        logging.debug('fetching cards from datestore: '+str(record_ids))
-        # otherwise we have to fetch them from datastore
-        for i in range_segment(record_ids):
-            if len(i) > 1:
-                cards = Card.gql('WHERE _id >= :1 and _id <= :2', i[0], i[-1]).fetch(i[-1]-i[0]+1)
-                # filter out unrelated cards
-                cards = filter(lambda x:x._id in i, cards)
-            elif len(i) == 1:
-                cards = [Card.gql('WHERE _id = :1', i[0]).get()]
-            else:
-                continue
-            
-            # add to memcache
-            for card in cards:
-                if not memcache.set(key='mememo_card'+str(card._id), value=card, time=7200):
-                    logging.error('memcache set item failed: '+ str(card._id))
-                if card:
-                    rr.append({'_id':card._id,
-                                'question':card.question,
-                                'answer':card.answer,
-                                'note':card.note,
-                                'deck_id':card.deck_id,
-                                'category':card.category
-                                })
-        end = quota.get_request_cpu_usage()
-        logging.info("prepare response cost %d megacycles." % (end - start))
+    end = quota.get_request_cpu_usage()
+    logging.info("prepare response cost %d megacycles." % (end - start))
 
-        return HttpResponse(simplejson.dumps(result,sort_keys=False))
+    return HttpResponse(simplejson.dumps(result,sort_keys=False))
 
 def update_item(request):
     '''Update the status of a record.'''
@@ -272,7 +262,7 @@ def skip_item(request):
                          }
             return HttpResponse(simplejson.dumps(result))
 
-    
+
 def mark_items(request):
     '''Mark items as new.'''
     if request.method == 'GET':
@@ -295,7 +285,7 @@ def mark_items(request):
             return HttpResponse(simplejson.dumps(result))
         
         # get learning progress
-        learning_progress = LearningProgress.gql('WHERE _user = :1', request.user).get()
+        learning_progress = LearningProgress.gql('WHERE _user = :1 AND active = TRUE', request.user).get()
         if not learning_progress:
             # get deck first
             deck = Deck.gql('WHERE _id = 1').get()  #FIXME: GRE
@@ -303,9 +293,11 @@ def mark_items(request):
                 logging.error('deck not found')
                 raise Exception, 'deck not found'
             learning_progress = LearningProgress.create(request.user, deck)
+            learning_progress.active = True
+            learning_progress.put()
         
         q_card = Card.all()
-        q_card.filter('question >',w_from).filter('question <=',w_to)
+        q_card.filter('deck_id =', learning_progress._deck._id).filter('question >',w_from).filter('question <=',w_to)
         new_cards = q_card.fetch(MAX_SIZE)
 
         count = 0
@@ -338,7 +330,7 @@ def mark_items_worker(request):
         # create learning record
         today = datetime.datetime.now(tz=CST).date()
         # get learning progress
-        learning_progress = LearningProgress.gql('WHERE _user = :1', user).get()
+        learning_progress = LearningProgress.gql('WHERE _user = :1 AND active = TRUE', user).get()
         learned_items_list = RangeList.decode(learning_progress.learned_items)
         for card_id in card_ids:
             if LearningRecord.gql('WHERE _user = :1 AND card_id = :2', user, card_id).get():
@@ -347,6 +339,7 @@ def mark_items_worker(request):
 
             r = LearningRecord(_user = user,
                 card_id = card_id,
+                deck_id = learning_progress._deck._id,
                 date_learn = today,
                 interval = 0,
                 next_rep = None,
@@ -425,11 +418,56 @@ def change_deck(request):
         else:
             current_deck = None
         template_vals = {'current_deck': current_deck,
-            'decks': decks}
+            'decks': decks,
+            'message': None}
         return render_to_response(request, 'xnmemo/change_deck.html', template_vals)
     elif request.method == 'POST':
-        pass
-        #~ return HttpResponse(simplejson.dumps(result))
+        decks = Deck.all().fetch(1000)
+        deck_id = int(request.POST.get('deck', 0))
+        if deck_id:
+            active_learning_progress = LearningProgress.gql('WHERE _user = :1 AND active = TRUE', request.user).get()
+            if active_learning_progress:
+                current_deck = active_learning_progress._deck
+                if current_deck._id ==  deck_id:
+                    # no need to change
+                    message = 'Deck is not changed.'
+                else:
+                    new_deck = Deck.gql('WHERE _id = :1', deck_id).get()
+                    learning_progresses = LearningProgress.gql('WHERE _user = :1', request.user).fetch(1000)
+                    learning_progresses = filter(lambda x:x._deck==new_deck, learning_progresses)
+                    if learning_progresses:
+                        new_learning_progress = learning_progresses[0]
+                    else:
+                        new_learning_progress = None
+                    if not new_learning_progress:
+                        new_learning_progress = LearningProgress.create(request.user, new_deck)
+                    active_learning_progress.active = False
+                    active_learning_progress.put()
+                    new_learning_progress.active = True
+                    new_learning_progress.put()
+                    current_deck = new_deck
+                    message = 'Deck changed to %s.' % (new_deck,)
+            else:
+                new_deck = Deck.gql('WHERE _id = :1', deck_id).get()
+                learning_progresses = LearningProgress.gql('WHERE _user = :1', request.user).fetch(1000)
+                learning_progresses = filter(lambda x:x._deck==new_deck, learning_progresses)
+                if learning_progresses:
+                    new_learning_progress = learning_progresses[0]
+                else:
+                    new_learning_progress = None
+                if not new_learning_progress:
+                    new_learning_progress = LearningProgress.create(request.user, new_deck)
+                new_learning_progress.active = True
+                new_learning_progress.put()
+                current_deck = new_deck
+                message = 'Deck changed to %s.' % (new_deck,)
+            # delete learning_progress from memcache
+            memcache.delete('learning_progress'+request.user.username)
+            # prepare response
+            template_vals = {'current_deck': current_deck,
+                'decks': decks,
+                'message': message}
+            return render_to_response(request, 'xnmemo/change_deck.html', template_vals)
 
 def fix_learning_progress(request):
     lps = LearningProgress.all().fetch(1000)
@@ -437,6 +475,25 @@ def fix_learning_progress(request):
         lp.active = True
         lp.put()
     return HttpResponse('%d LearningProgresses fixed.' % (len(lps),))
+
+@require_GET
+def fix_learning_record(request):
+    start_id = int(request.GET.get('from', 0))
+    end_id = int(request.GET.get('to', 0))
+    if not start_id or not end_id:
+        result = {  'status': 'failed',
+                    'message': 'error: from or to undefined' }
+        return HttpResponse(simplejson.dumps(result))
+    decks = Deck.all().fetch(1000)
+    records = LearningRecord.gql('WHERE card_id >= :1 AND card_id <= :2', start_id, end_id).fetch(1000)
+    for r in records:
+        for d in decks:
+            if r.card_id >= d.first_card_id and r.card_id <= d.last_card_id:
+                if not r.deck_id:
+                    r.deck_id = d._id
+                    r.put()
+    return HttpResponse('%d records fixed, from id: %d to id: %d' % (len(records),start_id,end_id))
+    
 
 def convert_learning_progress(request):
     lps = LearningProgress.all().fetch(1000)

@@ -62,6 +62,8 @@ class Deck(db.Model):
     name = db.StringProperty(required=True)
     description = db.StringProperty(multiline=True)
     volume = db.IntegerProperty(required=True, default=0)
+    first_card_id = db.IntegerProperty(required=True, default=0)
+    last_card_id = db.IntegerProperty(required=True, default=0)
 
     def __unicode__(self):
         return '%s' % (self.name,)
@@ -72,6 +74,7 @@ class LearningRecord(db.Model):
     #~ _id = db.IntegerProperty(required=True, default=0)
     _user = db.ReferenceProperty(User)
     card_id = db.IntegerProperty(required=True)
+    deck_id = db.IntegerProperty()
     date_learn = db.DateProperty(auto_now=True)
     interval = db.IntegerProperty(required=True, default=0)
     next_rep = db.DateProperty()
@@ -87,7 +90,7 @@ class LearningRecord(db.Model):
         return '%s: %s' % (self._user, self.card_id)
     
     @classmethod
-    def get_scheduled_items(self, user, id, size, flag, flt):
+    def get_scheduled_items(self, user, deck, id, size, flag, flt):
         '''
         Return a list of items.
             id: from which ID
@@ -104,7 +107,7 @@ class LearningRecord(db.Model):
         size  = min(size,MAX_SIZE)
         
         today = datetime.datetime.now(tz=CST).date()
-        q = LearningRecord.gql('WHERE _user = :1 AND next_rep <= :2 AND next_rep > NULL ORDER BY next_rep', user, today)
+        q = LearningRecord.gql('WHERE _user = :1 AND deck_id = :2 AND next_rep <= :3 AND next_rep > NULL ORDER BY next_rep', user, deck._id, today)
         results = q.fetch(size)
         results = filter(lambda x:x.acq_reps > 0, results)
         if len(results) > size:
@@ -116,7 +119,7 @@ class LearningRecord(db.Model):
         return results
     
     @classmethod    
-    def get_new_items(self, user, id, size, flag, flt):
+    def get_new_items(self, user, deck, id, size, flag, flt):
         '''
         Return a list of items.
             id: from which ID
@@ -130,7 +133,7 @@ class LearningRecord(db.Model):
         # limit number of items to MAX_SIZE
         MAX_SIZE = 100
         size  = min(size,MAX_SIZE)
-        q = LearningRecord.gql('WHERE _user = :1 AND acq_reps = :2', user, 0)
+        q = LearningRecord.gql('WHERE _user = :1 AND deck_id = :2 AND acq_reps = 0', user, deck._id)
         results = q.fetch(size)
         if len(results) >=  size:
             # we have fetched enough records
@@ -142,15 +145,15 @@ class LearningRecord(db.Model):
             count = 0
             #~ while count < new_items_size:
             # get learning progress
-            lp = LearningProgress.gql('WHERE _user = :1', user).get()
+            lp = LearningProgress.gql('WHERE _user = :1 AND active = TRUE', user).get()
             if not lp:
                 logging.error('LearningProgress not found.')
                 return results
             new_cards = []
             count = 0
             learned_items_list = RangeList.decode(lp.learned_items)
-            logging.debug(str(learned_items_list))
-            for i in range(1, lp._deck.volume):
+            #~ logging.debug(str(learned_items_list))
+            for i in range(lp._deck.first_card_id, lp._deck.last_card_id):
                 if i not in learned_items_list:
                     new_cards.append(i)
                     count += 1
@@ -178,6 +181,7 @@ class LearningRecord(db.Model):
                 r = LearningRecord(_user = user,
                     #~ card_id = c._id,
                     card_id = c,
+                    deck_id = lp._deck._id,
                     date_learn = today,
                     interval = 0,
                     next_rep = None,

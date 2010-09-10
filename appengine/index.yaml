@@ -8,6 +8,19 @@ indexes:
 - kind: core_learningrecord
   properties:
   - name: _user
+  - name: deck_id
+  - name: next_rep
+
+- kind: core_learningrecord
+  properties:
+  - name: _user
+  - name: card_id
+    direction: desc
+
+- kind: core_learningrecord
+  properties:
+  - name: _user
+  - name: deck_id
   - name: card_id
     direction: desc
 
