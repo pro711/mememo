@@ -80,9 +80,21 @@ def has_scheduled_items(request):
     limit = int(request.GET.get('limit', 0))
     size = limit if limit else 100
     result = {}
-    s_items = LearningRecord.get_scheduled_items(request.user,0,100,0,'')
+    # get learning progress
+    learning_progress = memcache.get('learning_progress'+request.user.username)
+    if learning_progress is not None:
+        # put into memcache
+        memcache.add('learning_progress'+request.user.username,learning_progress,3600)
+    else:
+        learning_progress = LearningProgress.gql('WHERE _user = :1 AND active = TRUE', request.user).get()
+        if not learning_progress:
+            result['scheduled_items'] = 0
+            result['scheduled_items_count'] = 0
+            return HttpResponse(simplejson.dumps(result))
+    s_items = LearningRecord.get_scheduled_items(request.user,learning_progress._deck,0,size,0,'')
     result['scheduled_items_count'] = len(s_items)
-    result['scheduled_items'] = [item.card_id for item in s_items]
+    result['scheduled_items'] = len(s_items)
+    result['scheduled_items_details'] = [item.card_id for item in s_items]
     return HttpResponse(simplejson.dumps(result))
         
 
@@ -471,10 +483,40 @@ def change_deck(request):
 
 def fix_learning_progress(request):
     lps = LearningProgress.all().fetch(1000)
+    entity_keys = []
     for lp in lps:
-        lp.active = True
-        lp.put()
-    return HttpResponse('%d LearningProgresses fixed.' % (len(lps),))
+        taskqueue.add(queue_name='fix-learning-progress', 
+                url='/xnmemo/fix_learning_progress_worker/',
+                params={'key': str(lp.key())})
+        entity_keys.append(str(lp.key()))
+    return HttpResponse('%d LearningProgresses fixed.\n%s' % (len(lps),entity_keys))
+
+@require_POST
+def fix_learning_progress_worker(request):
+    key = request.POST.get('key', '')
+    start_id = request.POST.get('start_id', '')
+    if not key:
+        return HttpResponse('Entity key not defined.')
+    lp = LearningProgress.get(key)
+    if not lp:
+        logging.error('Entity with key %s not found.' % key)
+        return HttpResponse('Entity with key %s not found.' % key)
+    if not start_id:
+        start_id = lp._deck.first_card_id
+    else:
+        start_id = int(start_id)
+    records = LearningRecord.gql('WHERE _user = :1 AND deck_id = :2 AND card_id >= :3 AND card_id <= :4 ORDER BY card_id', lp._user, lp._deck._id, start_id, lp._deck.last_card_id).fetch(500)
+    card_ids = [r.card_id for r in records]
+    learned_items = list(set(card_ids) | set(RangeList.decode(lp.learned_items)))
+    lp.learned_items = RangeList.encode(learned_items)
+    lp.put()
+    if len(card_ids) == 500:
+        # we have more to fix
+        taskqueue.add(queue_name='fix-learning-progress', 
+                url='/xnmemo/fix_learning_progress_worker/',
+                params={'key': str(lp.key()),
+                        'start_id': max(card_ids)+1})
+    return HttpResponse('LearningProgresses fixed.')
 
 @require_GET
 def fix_learning_record(request):
@@ -486,13 +528,14 @@ def fix_learning_record(request):
         return HttpResponse(simplejson.dumps(result))
     decks = Deck.all().fetch(1000)
     records = LearningRecord.gql('WHERE card_id >= :1 AND card_id <= :2', start_id, end_id).fetch(1000)
+    count = 0
     for r in records:
         for d in decks:
             if r.card_id >= d.first_card_id and r.card_id <= d.last_card_id:
-                if not r.deck_id:
-                    r.deck_id = d._id
-                    r.put()
-    return HttpResponse('%d records fixed, from id: %d to id: %d' % (len(records),start_id,end_id))
+                r.deck_id = d._id
+                r.put()
+                count += 1
+    return HttpResponse('%d of %d records fixed, from id: %d to id: %d' % (count, len(records),start_id,end_id))
     
 
 def convert_learning_progress(request):

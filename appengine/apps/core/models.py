@@ -103,7 +103,7 @@ class LearningRecord(db.Model):
         '''
         # FIXME: flag
         # limit number of items to MAX_SIZE
-        MAX_SIZE = 100
+        MAX_SIZE = 500
         size  = min(size,MAX_SIZE)
         
         today = datetime.datetime.now(tz=CST).date()
@@ -178,6 +178,11 @@ class LearningRecord(db.Model):
             # create learning records for these cards
             today = datetime.datetime.now(tz=CST).date()
             for c in new_cards:
+                # check if record already exists
+                # this should not happen, but build here as a safeguard
+                r = LearningRecord.gql('WHERE _user = :1 AND card_id = :2', user, c).get()
+                if r:
+                    continue
                 r = LearningRecord(_user = user,
                     #~ card_id = c._id,
                     card_id = c,

@@ -22,7 +22,35 @@ indexes:
   - name: _user
   - name: deck_id
   - name: card_id
+
+- kind: core_learningrecord
+  properties:
+  - name: _user
+  - name: deck_id
+  - name: card_id
     direction: desc
+
+- kind: core_learningrecord
+  properties:
+  - name: _user
+  - name: acq_reps
+  - name: deck_id
+
+- kind: core_card
+  properties:
+  - name: deck_id
+  - name: _id
+
+- kind: core_card
+  properties:
+  - name: deck_id
+  - name: _id
+    direction: desc
+
+- kind: core_card
+  properties:
+  - name: deck_id
+  - name: question
 
 - kind: django_admin_log
   properties:

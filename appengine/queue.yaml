@@ -4,3 +4,6 @@ queue:
 - name: mark-items-queue
   rate: 1/m
   bucket_size: 1
+- name: fix-learning-progress
+  rate: 5/m
+  bucket_size: 1
