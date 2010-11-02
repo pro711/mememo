@@ -6,9 +6,10 @@
 // @include        http://renren.com/home*
 // @include        http://www.renren.com/home*
 // @include        http://localhost*Home.do.html
+// @include        http://*.appspot.com/media/main.html
 // @description    为人人网增加背单词的功能
-// @version        0.1.2.20100826
-// @miniver        12
+// @version        0.1.3.20101102
+// @miniver        13
 // @author         pro711
 // ==/UserScript==
 //
@@ -56,15 +57,17 @@ var MEM={};
 MEM.url=document.location.href;
 
 // 服务器
-if ($page('home',MEM.url)) {
-	MEM.server = "http://me-memo.appspot.com/"
-} else {
-	MEM.server = "http://localhost:8080/"
-}
+//~ if ($page('home',MEM.url)) {
+	MEM.server = "http://me-memo.appspot.com/";
+//~ } else if (MEM.url.match("appspot.com/static/main.html")) {
+	//~ MEM.server = "http://me-memo.appspot.com/";
+//~ } else {
+	//~ MEM.server = "http://localhost:8080/";
+//~ }
 
 // 版本，对应@version和@miniver，用于升级相关功能
-MEM.version="0.1.2.20100826";
-MEM.miniver=12;
+MEM.version="0.1.3.20101102";
+MEM.miniver=13;
 
 // 存储空间，用于保存全局性变量
 MEM.storage={};
@@ -2030,20 +2033,29 @@ PageKit.prototype={
 function addToNavigateBar() {
 	//~ var entry=$node("a").attr({"id":"showMeMemo","class":"news-feed-type","href":"javascript:;"}).text("MeMemo");
 	//~ entry.appendTo($("#newsFeedTypes"));
-	var entry=$node("div").attr({"id":"showMeMemo","style":"position:relative; z-index:999;"}).append($node("a").attr({"href":"javascript:;","style":"right:190px; top:-30px; position:absolute;"}).text("MeMemo"));
-	$("#feedHolder").insert(entry,1);
-	entry.hook("click",function (evt) {
-		removeFeeds();
-		getScheduledItems();
-		});
+	if (MEM.url.match("appspot.com/static/main.html")) {
+		var entry = $("#showMeMemo");
+		entry.hook("click",function (evt) {
+			getScheduledItems();
+			});
+	} else {
+		var entry=$node("li").attr({"id":"showMeMemo"}).append($node("a").attr({"href":"javascript:;"}).text("MeMemo"));
+		$("#newsfeed-module-box .feed-tools menu").insert(entry,0);
+		entry.hook("click",function (evt) {
+			removeFeeds();
+			getScheduledItems();
+			});
+	}
 };
 
 // 清除Feeds
 function removeFeeds() {
-	const target="#feedHome";
-	$ban(target);
+	const feedlist="#newsfeed-module-box .feed-list";
+	$ban(feedlist);
+	const feedfooter="#newsfeed-module-box .feed-footer";
+	$ban(feedfooter);
 	entry = $node("div").code('<ul class="feeds richlist" id="meMemoFeedHome">');
-	entry.appendTo($("#feedHolder"));
+	entry.appendTo($("#newsfeed-module-box .feed-module"));
 }
 
 // 检查是否有到期的条目
@@ -2140,7 +2152,7 @@ function skipItem(id) {
 // 添加MeMemo条目
 function addMeMemoEntry(item) {
 	if ($('#memoItem_' + item._id).empty()) {
-		var entry=$node("li").attr("id","memoItem_" + item._id);
+		var entry=$node("article").attr({"id":"memoItem_" + item._id,"class":"a-feed"});
 		var h3 = $node("h3")
 		$node("").text(item.question).appendTo(h3);
 		var answer = $node("span").attr({"class":"statuscmtitem",
